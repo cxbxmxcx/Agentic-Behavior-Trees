@@ -1,17 +1,35 @@
 import py_trees
+from jinja2 import Template
 
 class AgentWrapper:
-    def __init__(self, agent, *args, **kwargs):
+    def __init__(self, agent, agent_instructions=None, **kwargs):
         """
-        Wrapper class for the agent to handle calling with args and kwargs.
+        Wrapper class for the agent to handle calling with template instructions.
+        
+        Args:
+            agent: The agent instance
+            agent_instructions: A Jinja2 template string for agent instructions
+            kwargs: Additional keyword arguments for the agent
         """
         self.agent = agent
-        self.args = args
+        self.template = Template(agent_instructions) if agent_instructions else None
         self.kwargs = kwargs
 
-    def __call__(self):
-        """Execute the agent call synchronously."""
-        return self.agent.ask_agent(*self.args, **self.kwargs)
+    def __call__(self, context=None):
+        """
+        Execute the agent call synchronously with template rendering.
+        
+        Args:
+            context: Dictionary of values to render the template with
+        """
+        if self.template and context:
+            instructions = self.template.render(**context)
+        elif self.template:
+            instructions = self.template.render()
+        else:
+            instructions = None
+            
+        return self.agent.ask_agent(instructions, **self.kwargs)
 
 
 class ActionWrapper(py_trees.behaviour.Behaviour):
@@ -29,6 +47,8 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
             name: Name of the action
             agent_wrapper: Wrapped agent instance
             is_condition: Whether this action is a condition check
+            input_keys: List of input keys to read from blackboard
+            output_keys: List of output keys to write to blackboard
         """
         super(ActionWrapper, self).__init__(name=name)        
         self.agent_wrapper = agent_wrapper
@@ -75,20 +95,13 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
         
         try:
             # Execute the agent action synchronously
-            # Read any required input data from blackboard
             context = {}
             for key in self.input_keys:
                 if hasattr(self.blackboard, key):
                     context[key] = getattr(self.blackboard, key)
             
-            # Update agent instructions with context if needed
-            if context:
-                if isinstance(self.agent_wrapper.args[0], str):
-                    instructions = self.agent_wrapper.args[0].format(**context)
-                    self.agent_wrapper.args = (instructions,) + self.agent_wrapper.args[1:]
-            
-            # Execute the agent action synchronously
-            result = self.agent_wrapper()
+            # Execute the agent action synchronously with context
+            result = self.agent_wrapper(context=context)
             print(result)
 
             # Write any output data to blackboard
@@ -98,13 +111,13 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
                         setattr(self.blackboard, key, result[key])
 
             # Check for explicit failure
-            if "FAILURE" in result.get("text", ""):
+            if "FAILURE" in result.get("content", ""):
                 print(f"{self.name}: Action completed with failure.")
                 return py_trees.common.Status.FAILURE
 
             # Handle condition vs action behavior
             if self.is_condition:
-                self.success = "SUCCESS" in result["content"]
+                self.success = "SUCCESS" in result.get("content", "")
             else:
                 self.success = True
 
@@ -125,24 +138,70 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
         self.success = False
 
 
-def create_agent_node(name: str, agent, agent_instructions: str, is_condition: bool = False):
+def create_agent_node(name: str, 
+                     agent, 
+                     agent_instructions: str, 
+                     is_condition: bool = False,
+                     input_keys: list = None,
+                     output_keys: list = None,
+                     **kwargs):
     """
     Create a new agent action node for the behavior tree.
     
     Args:
         name: Name of the action node
         agent: Agent instance
-        agent_instructions: Instructions for the agent
+        agent_instructions: Instructions template for the agent
         is_condition: Whether this action is a condition check
+        input_keys: List of input keys to read from blackboard
+        output_keys: List of output keys to write to blackboard
+        kwargs: Additional keyword arguments to pass to the agent
         
     Returns:
         ActionWrapper instance configured with the provided parameters
     """
     agent_wrapper = AgentWrapper(
-        agent, agent_instructions
+        agent=agent,
+        agent_instructions=agent_instructions,
+        **kwargs
     )
     return ActionWrapper(
         name=name,      
         agent_wrapper=agent_wrapper,
-        is_condition=is_condition
+        is_condition=is_condition,
+        input_keys=input_keys,
+        output_keys=output_keys
     )
+
+
+def initialize_blackboard(root: py_trees.behaviour.Behaviour, initial_values: dict):
+    """
+    Initialize the behavior tree's blackboard with a dictionary of values.
+    
+    Args:
+        root: Root node of the behavior tree
+        initial_values: Dictionary of key-value pairs to initialize in the blackboard
+        
+    Example:
+        root = py_trees.composites.Sequence("Root")
+        # Add your nodes to the root
+        ...
+        # Initialize blackboard
+        initialize_blackboard(root, {
+            "context": "initial context",
+            "user_input": "sample input",
+            "previous_result": None
+        })
+    """
+    # Create a blackboard client for initialization
+    blackboard = py_trees.blackboard.Client(name="Initializer")
+    
+    # Register and set each key-value pair
+    for key, value in initial_values.items():
+        blackboard.register_key(
+            key=key,
+            access=py_trees.common.Access.WRITE
+        )
+        setattr(blackboard, key, value)
+    
+    print(f"Initialized blackboard with values: {initial_values}")
