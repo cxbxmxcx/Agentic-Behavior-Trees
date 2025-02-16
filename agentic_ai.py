@@ -346,7 +346,7 @@ class Agent:
         # Execute the function with the provided arguments
         return self.functions[func_name](**arguments)
             
-    def ask_agent(self, user_input: str, system_template: str=None, context: Dict=None, **api_kwargs) -> Dict[str, Any]:
+    def ask_agent(self, user_input: str, system_template: str=None, context: Dict=None, thread=None, **api_kwargs) -> Dict[str, Any]:
         """
         Process user input using the agent's system prompt and tools.
         Handles multiple turns of tool calling until a final response is reached.
@@ -362,6 +362,9 @@ class Agent:
             self.load_system_prompt(system_template, context)
         # if not self.system_prompt:
         #     raise ValueError("System prompt has not been loaded. Call load_system_prompt first.")
+
+        if thread:
+            self.thread = thread
             
         # Add user input to conversation thread
         self.thread.add_message("user", user_input)

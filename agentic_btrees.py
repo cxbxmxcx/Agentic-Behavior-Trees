@@ -1,5 +1,8 @@
+import json
 import py_trees
 from jinja2 import Template
+
+from agentic_ai import ConversationThread
 
 class AgentWrapper:
     def __init__(self, agent, agent_instructions=None, **kwargs):
@@ -22,6 +25,9 @@ class AgentWrapper:
         Args:
             context: Dictionary of values to render the template with
         """
+        thread = context.get("thread", None)
+        context.pop("thread", None)
+
         if self.template and context:
             instructions = self.template.render(**context)
         elif self.template:
@@ -29,9 +35,8 @@ class AgentWrapper:
         else:
             instructions = None
             
-        return self.agent.ask_agent(instructions, **self.kwargs)
-
-
+        return self.agent.ask_agent(instructions, thread=thread, **self.kwargs)
+    
 class ActionWrapper(py_trees.behaviour.Behaviour):
     def __init__(self, 
                  name, 
@@ -39,6 +44,7 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
                  is_condition=False,
                  input_keys=None,
                  output_keys=None,
+                 use_thread=True,
                  ):
         """
         A synchronous action wrapper for behavior trees.
@@ -55,10 +61,17 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
         self.is_condition = is_condition
         self.success = False
         self.run_context = None
+        self.use_thread = use_thread
 
         # Blackboard data management
-        self.input_keys = input_keys or []
+        self.input_keys = input_keys or []        
         self.output_keys = output_keys or []
+
+        if self.use_thread:
+            self.input_keys.append("thread")
+            self.input_keys.append("content")
+            self.output_keys.append("thread")
+            self.output_keys.append("content")
         
         # Create blackboard client with node name
         self.blackboard = self.attach_blackboard_client(name=name)
@@ -107,7 +120,7 @@ class ActionWrapper(py_trees.behaviour.Behaviour):
             # Write any output data to blackboard
             if isinstance(result, dict):
                 for key in self.output_keys:
-                    if key in result:
+                    if key in result:                        
                         setattr(self.blackboard, key, result[key])
 
             # Check for explicit failure
@@ -174,34 +187,3 @@ def create_agent_node(name: str,
     )
 
 
-def initialize_blackboard(root: py_trees.behaviour.Behaviour, initial_values: dict):
-    """
-    Initialize the behavior tree's blackboard with a dictionary of values.
-    
-    Args:
-        root: Root node of the behavior tree
-        initial_values: Dictionary of key-value pairs to initialize in the blackboard
-        
-    Example:
-        root = py_trees.composites.Sequence("Root")
-        # Add your nodes to the root
-        ...
-        # Initialize blackboard
-        initialize_blackboard(root, {
-            "context": "initial context",
-            "user_input": "sample input",
-            "previous_result": None
-        })
-    """
-    # Create a blackboard client for initialization
-    blackboard = py_trees.blackboard.Client(name="Initializer")
-    
-    # Register and set each key-value pair
-    for key, value in initial_values.items():
-        blackboard.register_key(
-            key=key,
-            access=py_trees.common.Access.WRITE
-        )
-        setattr(blackboard, key, value)
-    
-    print(f"Initialized blackboard with values: {initial_values}")

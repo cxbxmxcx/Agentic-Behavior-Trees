@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 import py_trees
 import time
 
-from agentic_btrees import create_agent_node, initialize_blackboard
+from agentic_blackboard import get_blackboard_value, initialize_blackboard
+from agentic_btrees import create_agent_node
+from agentic_conversation import run_conversation_loop
 import mermaid
 
 load_dotenv()
@@ -35,8 +37,8 @@ root = py_trees.composites.Selector("RootSelector", memory=True)
 sequence_node = py_trees.composites.Sequence("Sequence", memory=True)
 root.add_child(sequence_node)
 
-inputs = dict(question = "list the belts ?")
-initialize_blackboard(root, inputs)
+# inputs = dict(question = "list the belts ?")
+initialize_blackboard(root, {})
 
 expansion_glossary_node = create_agent_node(
     name="ExpansionWithGlossary",
@@ -46,53 +48,55 @@ expansion_glossary_node = create_agent_node(
     Return FAILURE if you cannot expand the question.
     Question: {{question}}
     """,
-    input_keys=["question"]
+    input_keys=["question"],    
 )
 sequence_node.add_child(expansion_glossary_node)
 
 identify_data_sources_node = create_agent_node(
     name="IdentifyDataSources",
     agent=agent,
-    agent_instructions="""
+    agent_instructions="""    
     Identify the data sources for the question.
     Return FAILURE if you cannot identify the data sources.
     Question: {{question}}
     """,
-    input_keys=["question"]
+    input_keys=["question",],
+    
 )
 sequence_node.add_child(identify_data_sources_node)
 
 answer_question_node = create_agent_node(
     name="AnswerQuestion",
     agent=agent,
-    agent_instructions="""
+    agent_instructions="""    
     Answer the question.
     Return FAILURE if you cannot answer the question.
     Question: {{question}}
     """,
-    input_keys=["question"]
+    input_keys=["question",],   
 )
 sequence_node.add_child(answer_question_node)
 
 copyright_safety_node = create_agent_node(
     name="CopyrightSafety",
     agent=agent,
-    agent_instructions="""
+    agent_instructions="""    
     Check for copyright safety.
     Return FAILURE if the content is not safe for copyright.
     Question: {{question}}
     """,
-    input_keys=["question"]
+    input_keys=["question"],    
 )
 sequence_node.add_child(copyright_safety_node)
 
 ask_questions_node = create_agent_node(
     name="AskQuestions",
     agent=agent,
-    agent_instructions="""
+    agent_instructions="""    
     Ask clarifying questions.
     Question: {{question}}
     """,
+    input_keys=["question",],    
 )
 
 root.add_child(ask_questions_node)
@@ -102,9 +106,13 @@ tree = py_trees.trees.BehaviourTree(root)
 diagram = mermaid.tree_to_mermaid(root)
 print(diagram)
 
-# Tick the tree to run it
-while True:
-    tree.tick()
-    time.sleep(10)
-    if root.status == py_trees.common.Status.SUCCESS:
-        break
+# # Tick the tree to run it
+# while True:
+#     tree.tick()
+#     time.sleep(10)
+#     if root.status == py_trees.common.Status.SUCCESS:
+#         break
+
+# print(get_blackboard_value("content"))
+
+run_conversation_loop(tree, root)
