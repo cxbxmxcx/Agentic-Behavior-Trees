@@ -1,5 +1,5 @@
 from jinja2 import Environment, FileSystemLoader
-from openai import AzureOpenAI, RateLimitError
+from openai import OpenAI, AzureOpenAI, RateLimitError
 import time
 import os
 import logging
@@ -10,6 +10,16 @@ import json
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 from datetime import datetime
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+api_type = os.getenv("OPENAI_API_TYPE")
+api_key = os.getenv("OPENAI_API_KEY")
+api_endpoint = os.getenv("OPENAI_API_ENDPOINT")
+api_version = os.getenv("OPENAI_API_VERSION")
+api_deployment = os.getenv("OPENAI_API_DEPLOYMENT")
 
 def handle_semantic_function_call(prompt, agent):
     system, user = parse_prompt(prompt)
@@ -118,31 +128,32 @@ class ConversationThread:
 
 
 class LLMEngine:
-    def __init__(self, 
-                 api_key: str,
-                 api_endpoint: str,
-                 api_version: str,
-                 deployment_name: str):
+    def __init__(self):
         """
         Initialize the LLMEngine with Azure OpenAI parameters.
         """
-        if not all([api_key, api_endpoint, api_version]):
-            raise ValueError("Please set the Azure-OpenAI-key, Azure-OpenAI-endpoint, and Azure-OpenAI-api-version secrets.")
-        
-        self.deployment_name = deployment_name
+        if api_type == "azure":
+            if not all([api_key, api_endpoint, api_version]):
+                raise ValueError("Please set the Azure-OpenAI-key, Azure-OpenAI-endpoint, and Azure-OpenAI-api-version secrets.")
+                
+            self.deployment_name = api_deployment
+            self.client = AzureOpenAI(
+                api_key=api_key,  
+                api_version=api_version,
+                azure_endpoint=api_endpoint
+            )
+        else # default to api_type == "openai":
+            if not api_key:
+                raise ValueError("Please set the OpenAI API key.") 
+            self.client = OpenAI(api_key=api_key) 
+            
         self.in_tokens = 0
         self.out_tokens = 0
-        
-        self.client = AzureOpenAI(
-            api_key=api_key,  
-            api_version=api_version,
-            azure_endpoint=api_endpoint
-        )
 
-    def generate_response(self, 
-                         messages: List[Dict[str, str]],
-                         tools: Optional[List[Dict[str, Any]]] = None,
-                         **api_kwargs) -> Dict[str, Any]:
+    def generate_response(self,                           
+                          messages: List[Dict[str, str]],                         
+                          tools: Optional[List[Dict[str, Any]]] = None,
+                          **api_kwargs) -> Dict[str, Any]:
         """
         Generate a response from Azure OpenAI using the provided message history and tools.
         """
