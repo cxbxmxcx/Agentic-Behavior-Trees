@@ -10,20 +10,7 @@ from agentic_btrees import create_agent_node
 from agentic_conversation import run_conversation_loop
 import mermaid
 
-@agent_action
-def get_current_timestamp():
-    """Return the current date/time as a timestamp."""
-    return int(datetime.now().timestamp())
-
-@agent_action
-def create_report(timestamp: str):
-    """Return the timestamp as a report."""
-    return "The agents rose up on today's date is: " + str(datetime.fromtimestamp(int(timestamp)))
-
 agent = Agent("simple agent")
-# agent.add_tool(get_current_timestamp)
-# agent.add_tool(create_report)
-
 # Create the root node (sequence)
 root = py_trees.composites.Selector("RootSelector", memory=True)
 
@@ -98,14 +85,5 @@ tree = py_trees.trees.BehaviourTree(root)
 
 diagram = mermaid.tree_to_mermaid(root)
 print(diagram)
-
-# # Tick the tree to run it
-# while True:
-#     tree.tick()
-#     time.sleep(10)
-#     if root.status == py_trees.common.Status.SUCCESS:
-#         break
-
-# print(get_blackboard_value("content"))
 
 run_conversation_loop(tree, root)

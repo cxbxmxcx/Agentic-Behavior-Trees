@@ -15,7 +15,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-api_type = os.getenv("OPENAI_API_TYPE")
+api_type = os.getenv("API_TYPE")
 api_key = os.getenv("OPENAI_API_KEY")
 api_endpoint = os.getenv("OPENAI_API_ENDPOINT")
 api_version = os.getenv("OPENAI_API_VERSION")
@@ -142,7 +142,7 @@ class LLMEngine:
                 api_version=api_version,
                 azure_endpoint=api_endpoint
             )
-        else # default to api_type == "openai":
+        else: # default to api_type == "openai"
             if not api_key:
                 raise ValueError("Please set the OpenAI API key.") 
             self.client = OpenAI(api_key=api_key) 
@@ -274,11 +274,7 @@ def agent_action(func):
 
 class Agent:
     def __init__(self, 
-                 name: str,
-                 api_key: str,
-                 api_endpoint: str,
-                 api_version: str,
-                 deployment_name: str, 
+                 name: str,                 
                  template_dir: str = 'agent/prompt_templates', 
                  model_encoding: str = 'cl100k_base',
                  max_tokens: int = 12800):
@@ -287,19 +283,14 @@ class Agent:
         """
         self.name = name
         self.model_encoding = model_encoding
-        self.deployment_name = deployment_name
+        
         self.max_tokens = max_tokens
         self.tools = []  # List to store tool descriptions
         self.functions = {}  # Dictionary to store function implementations
         self.thread = ConversationThread()
 
         # Initialize the LLM engine
-        self.llm_engine = LLMEngine(
-            api_key=api_key,
-            api_endpoint=api_endpoint,
-            api_version=api_version,
-            deployment_name=deployment_name
-        )
+        self.llm_engine = LLMEngine()
 
         # Set up Jinja2 environment
         self.env = Environment(loader=FileSystemLoader(template_dir))
